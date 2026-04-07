@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection.Metadata;
+
 
 try
 {
@@ -14,6 +14,8 @@ try
     }
     // lee y procesa los argumentos que el usuario ingreso por consola
      var config = ParseArgs(args); 
+    //lee el contenido del archivo
+     var text = ReadInput(config);
 
 }
 catch (Exception ex){
@@ -72,6 +74,13 @@ AppConfig ParseArgs(string[] args)
         throw new Exception("Debe especificar al menos un campo (-b)");
 
     return new AppConfig(input, output, delimiter, noHeader, sortFields);
+}
+string ReadInput (AppConfig config)
+{
+    if (config.InputFile !=null)
+    return File.ReadAllText(config.InputFile);
+
+    return Console.In.ReadToEnd();
 }
 
  
