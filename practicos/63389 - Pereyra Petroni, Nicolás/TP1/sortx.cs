@@ -82,6 +82,43 @@ string ReadInput (AppConfig config)
 
     return Console.In.ReadToEnd();
 }
+(List<string> headers, List<Dictionary<string, string>> rows) ParseDelimited(string text, AppConfig config)
+{
+    var lines = text.Split('\n',StringSplitOptions.RemoveEmptyEntries)
+    .Select(i => i.Trim('\r'))  
+    .ToList() ;
+    
+    List<string> headers;
+    if (!config.NoHeader)
+    {
+        headers = lines [0].Split(config.Delimiter).ToList();
+        lines.RemoveAt(0); 
+    }
+    else
+    {
+        var count = lines [0].Split(config.Delimiter).Length;
+        headers=Enumerable.Range(0, count)
+        .Select(i => i.Tostring())
+        .ToList();
+    }
+    var rows = new List<Dictionary<string,string>>();
+    foreach(var line in lines)
+    {
+        var values = line.Split(config.Delimiter);
+        var dict = new Dictionary<string,string>();
+        for (int i=0;i < headers.Count; i++)
+        {
+             dict[headers[i]] = i < values.Length ? values[i] : "";
+        }
+        rows.Add(dict);
+
+    }
+    return(headers,rows);
+
+
+
+
+}
 
  
 record SortField (string Name, bool Numeric, bool Descending);
