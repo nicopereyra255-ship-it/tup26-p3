@@ -187,6 +187,17 @@ string Serialize(
 
     return string.Join("\n", lines);
 }
+void WriteOutput (string output,AppConfig config)
+{
+    if (config.OutputFile != null)
+    {
+        File.WriteAllText(config.OutputFile,output);
+    }
+    else
+    {
+        Console.WriteLine(output);
+    }
+}
 
 
 
