@@ -16,6 +16,18 @@ try
      var config = ParseArgs(args); 
     //lee el contenido del archivo
      var text = ReadInput(config);
+    // convierte el texto en una estructura de datos (headers y filas)
+    
+    var data = ParseDelimited(text, config);
+
+     //ordena las filas segun los criterios indicados
+     var sorted = SortRows(data, config);
+
+     // convierte las filas ordenadas nuevamente a texto
+     var output = Serialize(sorted, config);
+
+     // muestra el resultado en consola o lo guarda en un archivo
+     WriteOutput(output, config);
 
 }
 catch (Exception ex){
@@ -98,7 +110,7 @@ string ReadInput (AppConfig config)
     {
         var count = lines [0].Split(config.Delimiter).Length;
         headers=Enumerable.Range(0, count)
-        .Select(i => i.Tostring())
+        .Select(i => i.ToString())
         .ToList();
     }
     var rows = new List<Dictionary<string,string>>();
@@ -119,6 +131,64 @@ string ReadInput (AppConfig config)
 
 
 }
+List<Dictionary<string, string>> SortRows(
+    (List<string> headers, List<Dictionary<string, string>> rows) data,
+    AppConfig config)
+{
+    var rows = data.rows;
+
+    IOrderedEnumerable<Dictionary<string, string>>? ordered = null;
+
+    foreach (var field in config.SortFields)
+    {
+        Func<Dictionary<string, string>, object> keySelector = row =>
+        {
+            var value = row.ContainsKey(field.Name) ? row[field.Name] : "";
+
+            if (field.Numeric && double.TryParse(value, out var num))
+                return num;
+
+            return value;
+        };
+
+        if (ordered == null)
+        {
+            ordered = field.Descending
+                ? rows.OrderByDescending(keySelector)
+                : rows.OrderBy(keySelector);
+        }
+        else
+        {
+            ordered = field.Descending
+                ? ordered.ThenByDescending(keySelector)
+                : ordered.ThenBy(keySelector);
+        }
+    }
+
+    return ordered?.ToList() ?? rows;
+}
+string Serialize(
+    List<Dictionary<string, string>> rows,
+    AppConfig config)
+{
+    var lines = new List<string>();
+
+    // si hay encabezado
+    if (!config.NoHeader && rows.Count > 0)
+    {
+        var headers = rows[0].Keys.ToList();
+        lines.Add(string.Join(config.Delimiter, headers));
+    }
+
+    foreach (var row in rows)
+    {
+        lines.Add(string.Join(config.Delimiter, row.Values));
+    }
+
+    return string.Join("\n", lines);
+}
+
+
 
  
 record SortField (string Name, bool Numeric, bool Descending);
