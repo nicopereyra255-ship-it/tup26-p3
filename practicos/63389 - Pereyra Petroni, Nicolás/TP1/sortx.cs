@@ -3,37 +3,39 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-
 try
 {
-    // validamos que contenga parametros
-    if(args.Length == 0)
+    // si no hay argumentos
+    if (args.Length == 0)
     {
-        Console.WriteLine("Debe especificar un parametro");
+        Console.WriteLine("Use --help para ver las opciones");
         return;
     }
-    // lee y procesa los argumentos que el usuario ingreso por consola
-     var config = ParseArgs(args); 
-    //lee el contenido del archivo
-     var text = ReadInput(config);
-    // convierte el texto en una estructura de datos (headers y filas)
-    
+
+    // 1. Parseo de argumentos
+    var config = ParseArgs(args);
+
+    // 2. Lectura de entrada
+    var text = ReadInput(config);
+
+    // 3. Parseo del archivo
     var data = ParseDelimited(text, config);
 
-     //ordena las filas segun los criterios indicados
-     var sorted = SortRows(data, config);
+    // 4. Ordenamiento
+    var sorted = SortRows(data, config);
 
-     // convierte las filas ordenadas nuevamente a texto
-     var output = Serialize(sorted, config);
+    // 5. Serialización (IMPORTANTE: headers + rows)
+    var output = Serialize(data.headers, sorted, config);
 
-     // muestra el resultado en consola o lo guarda en un archivo
-     WriteOutput(output, config);
-
+    // 6. Salida
+    WriteOutput(output, config);
 }
-catch (Exception ex){
-    //muestra mensaje de error en caso de que exista
+catch (Exception ex)
+{
     Console.Error.WriteLine(ex.Message);
 }
+
+// ===================== PARSE ARGS =====================
 
 AppConfig ParseArgs(string[] args)
 {
@@ -47,7 +49,12 @@ AppConfig ParseArgs(string[] args)
     {
         var arg = args[i];
 
-        if (arg == "-i" || arg == "--input")
+        if (arg == "-h" || arg == "--help")
+        {
+            Console.WriteLine("Uso: sortx [input] [output] -b campo[:tipo[:orden]]");
+            Environment.Exit(0);
+        }
+        else if (arg == "-i" || arg == "--input")
             input = args[++i];
 
         else if (arg == "-o" || arg == "--output")
@@ -58,7 +65,6 @@ AppConfig ParseArgs(string[] args)
             var d = args[++i];
             delimiter = d == "\\t" ? "\t" : d;
         }
-
         else if (arg == "-nh" || arg == "--no-header")
             noHeader = true;
 
@@ -72,7 +78,6 @@ AppConfig ParseArgs(string[] args)
 
             sortFields.Add(new SortField(name, numeric, desc));
         }
-
         else if (!arg.StartsWith("-"))
         {
             if (input == null)
@@ -87,50 +92,60 @@ AppConfig ParseArgs(string[] args)
 
     return new AppConfig(input, output, delimiter, noHeader, sortFields);
 }
-string ReadInput (AppConfig config)
+
+// ===================== READ INPUT =====================
+
+string ReadInput(AppConfig config)
 {
-    if (config.InputFile !=null)
-    return File.ReadAllText(config.InputFile);
+    if (config.InputFile != null)
+        return File.ReadAllText(config.InputFile);
 
     return Console.In.ReadToEnd();
 }
+
+// ===================== PARSE DELIMITED =====================
+
 (List<string> headers, List<Dictionary<string, string>> rows) ParseDelimited(string text, AppConfig config)
 {
-    var lines = text.Split('\n',StringSplitOptions.RemoveEmptyEntries)
-    .Select(i => i.Trim('\r'))  
-    .ToList() ;
-    
+    var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        .Select(l => l.Trim('\r'))
+        .ToList();
+
     List<string> headers;
+
     if (!config.NoHeader)
     {
-        headers = lines [0].Split(config.Delimiter).ToList();
-        lines.RemoveAt(0); 
+        headers = lines[0].Split(config.Delimiter).ToList();
+        lines.RemoveAt(0);
     }
     else
     {
-        var count = lines [0].Split(config.Delimiter).Length;
-        headers=Enumerable.Range(0, count)
-        .Select(i => i.ToString())
-        .ToList();
+        var count = lines[0].Split(config.Delimiter).Length;
+        headers = Enumerable.Range(0, count)
+            .Select(i => i.ToString())
+            .ToList();
     }
-    var rows = new List<Dictionary<string,string>>();
-    foreach(var line in lines)
+
+    var rows = new List<Dictionary<string, string>>();
+
+    foreach (var line in lines)
     {
         var values = line.Split(config.Delimiter);
-        var dict = new Dictionary<string,string>();
-        for (int i=0;i < headers.Count; i++)
+        var dict = new Dictionary<string, string>();
+
+        for (int i = 0; i < headers.Count; i++)
         {
-             dict[headers[i]] = i < values.Length ? values[i] : "";
+            dict[headers[i]] = i < values.Length ? values[i] : "";
         }
+
         rows.Add(dict);
-
     }
-    return(headers,rows);
 
-
-
-
+    return (headers, rows);
 }
+
+
+
 List<Dictionary<string, string>> SortRows(
     (List<string> headers, List<Dictionary<string, string>> rows) data,
     AppConfig config)
@@ -141,6 +156,10 @@ List<Dictionary<string, string>> SortRows(
 
     foreach (var field in config.SortFields)
     {
+        // VALIDACIÓN DE CAMPO
+        if (!data.headers.Contains(field.Name))
+            throw new Exception($"Campo inexistente: {field.Name}");
+
         Func<Dictionary<string, string>, object> keySelector = row =>
         {
             var value = row.ContainsKey(field.Name) ? row[field.Name] : "";
@@ -167,31 +186,37 @@ List<Dictionary<string, string>> SortRows(
 
     return ordered?.ToList() ?? rows;
 }
+
+
+
 string Serialize(
+    List<string> headers,
     List<Dictionary<string, string>> rows,
     AppConfig config)
 {
     var lines = new List<string>();
 
-    // si hay encabezado
-    if (!config.NoHeader && rows.Count > 0)
+    if (!config.NoHeader)
     {
-        var headers = rows[0].Keys.ToList();
         lines.Add(string.Join(config.Delimiter, headers));
     }
 
     foreach (var row in rows)
     {
-        lines.Add(string.Join(config.Delimiter, row.Values));
+        var values = headers.Select(h => row.ContainsKey(h) ? row[h] : "");
+        lines.Add(string.Join(config.Delimiter, values));
     }
 
     return string.Join("\n", lines);
 }
-void WriteOutput (string output,AppConfig config)
+
+
+
+void WriteOutput(string output, AppConfig config)
 {
     if (config.OutputFile != null)
     {
-        File.WriteAllText(config.OutputFile,output);
+        File.WriteAllText(config.OutputFile, output);
     }
     else
     {
@@ -201,16 +226,16 @@ void WriteOutput (string output,AppConfig config)
 
 
 
- 
-record SortField (string Name, bool Numeric, bool Descending);
+record SortField(string Name, bool Numeric, bool Descending);
 
 record AppConfig(
-string? InputFile,    //archivo de entrada
-string? OutputFile,   // archivo de salida 
-string Delimiter,     // separador de las columnas
-bool NoHeader,
-List<SortField> SortFields   // lista que contiene los criterios de ordenamiento
+    string? InputFile,
+    string? OutputFile,
+    string Delimiter,
+    bool NoHeader,
+    List<SortField> SortFields
 );
+
 
 
 
